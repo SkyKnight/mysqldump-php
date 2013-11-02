@@ -28,6 +28,10 @@ class Mysqldump
         'extended-insert' => true
     );
     private $compressManager;
+    
+    // SKY H4CK BEGIN
+    private $dbServerVersion;
+    // SKY H4CK END
 
     /**
      * Constructor of Mysqldump. Note that in the case of an SQLite database connection, the filename must be in the $db parameter.
@@ -89,6 +93,11 @@ class Mysqldump
 
                 case 'mysql': case 'pgsql': case 'dblib':
                     $this->dbHandler = new PDO($this->type . ":host=" . $this->host.";dbname=" . $this->db, $this->user, $this->pass, $this->pdo_options);
+                    
+                    // SKY H4CK BEGIN             
+                    $this->dbServerVersion = $this->dbHandler->getAttribute(PDO::ATTR_SERVER_VERSION);
+                    if((int)$this->dbServerVersion > 4)
+                    // SKY H4CK END
                     // Fix for always-unicode output
                     $this->dbHandler->exec("SET NAMES utf8");
                     break;
@@ -102,7 +111,7 @@ class Mysqldump
         }
 
         $this->dbHandler->setAttribute(PDO::ATTR_ORACLE_NULLS, PDO::NULL_NATURAL);
-        $this->adapter = new TypeAdapter($this->type);
+        $this->adapter = new TypeAdapter($this->type, $this->dbServerVersion);
     }
 
     /**
@@ -429,10 +438,15 @@ class CompressNone extends CompressManagerFactory
 
 class TypeAdapter
 {
-    public function __construct($type){
+    // SKY H4CK BEGIN
+    private $type;
+    private $version;
+    
+    public function __construct($type,$version){
         $this->type = $type;
+        $this->version = $version;
     }
-
+// SKY H4CK END
     public function show_create_table($tablename){
         switch($this->type){
             case 'sqlite':
@@ -447,7 +461,8 @@ class TypeAdapter
 			case 'sqlite':
 				return "SELECT tbl_name FROM sqlite_master where type='table'";
 			default:
-				return "SELECT TABLE_NAME AS tbl_name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE' AND TABLE_SCHEMA='$dbName'";
+				return (int)$this->version > 4 ? "SELECT TABLE_NAME AS tbl_name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE' AND TABLE_SCHEMA='$dbName'"
+                    : "SHOW TABLES IN ".$dbName;
 		}
 	}
 
